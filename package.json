@@ -1,0 +1,28 @@
+{
+  "name": "pixel-pizza-panic",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pixel Pizza Panic - Phaser + Vite + Capacitor Android setup",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 5173",
+    "cap:init": "cap init pixel-pizza-panic com.pixel.pizzapanic --web-dir=dist",
+    "cap:add:android": "cap add android",
+    "cap:sync": "cap sync",
+    "cap:open:android": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.1.0",
+    "phaser": "^3.60.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/cli": "^6.1.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.4"
+  }
+}
+
+
