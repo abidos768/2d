@@ -1,11 +1,12 @@
 // Created: Mobile-first game scene (portrait), basic loop: move, spawn, catch, score, timer.
 import Phaser from 'phaser'
 import type { ToppingName } from './PreloadScene'
+import { TOPPING_FRAMES } from './PreloadScene'
 
-type GoodTopping = 'tomato' | 'cheese' | 'pepperoni' | 'mushrooms'
+type GoodTopping = 'tomato' | 'pizza' | 'mushrooms'
 type BadTopping = 'boots' | 'trash' | 'pineapple'
 
-const GOOD_TOPPINGS: GoodTopping[] = ['tomato', 'cheese', 'pepperoni', 'mushrooms']
+const GOOD_TOPPINGS: GoodTopping[] = ['tomato', 'pizza', 'mushrooms']
 const BAD_TOPPINGS: BadTopping[] = ['boots', 'trash'] // pineapple optional/evil mode
 
 interface ToppingSprite extends Phaser.Physics.Arcade.Image {
@@ -118,15 +119,26 @@ export class GameScene extends Phaser.Scene {
 
     const spawnGood = Math.random() < (this.evilMode ? 0.7 : 0.8)
     const name = spawnGood ? Phaser.Utils.Array.GetRandom(GOOD_TOPPINGS) : Phaser.Utils.Array.GetRandom(this.getBadPool())
-    const key = `topping-${name}`
 
     const x = Phaser.Math.Between(32, width - 32)
     const y = -32
-    const sprite = this.toppings.create(x, y, key) as ToppingSprite
+    const hasSheet = this.textures.exists('toppings')
+    const sprite = hasSheet
+      ? (this.toppings.create(x, y, 'toppings', TOPPING_FRAMES[name as ToppingName]) as ToppingSprite)
+      : (this.toppings.create(x, y, `topping-${name}`) as ToppingSprite)
     sprite.toppingName = name
     sprite.isGood = spawnGood
     sprite.setVelocityY(this.fallSpeed * Phaser.Math.FloatBetween(0.9, 1.15))
-    sprite.setCircle(16)
+    // Collider sized for 32px placeholder or scaled sheet frames
+    if (hasSheet) {
+      // Scale down large frames to ~48px visual size
+      const targetSize = 48
+      const scale = targetSize / 384
+      sprite.setScale(scale)
+      sprite.setCircle((targetSize / 2) * 0.85)
+    } else {
+      sprite.setCircle(16)
+    }
     sprite.setImmovable(false)
     sprite.setCollideWorldBounds(false)
     // Clean up when off screen

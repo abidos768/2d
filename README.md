@@ -1,4 +1,4 @@
-<!-- Created: Initial README with Android build/run instructions. -->
+<!-- Updated: Added instructions for adding a toppings spritesheet in public/assets. -->
 
 # Pixel Pizza Panic (Phaser + Vite + Capacitor)
 
@@ -38,5 +38,16 @@ npm run cap:open:android
 Notes:
 - Portrait orientation is recommended. If needed, set it in `android/app/src/main/AndroidManifest.xml` on the main activity.
 - `vite.config.ts` uses `base: ''` to work with Capacitor assets.
+
+## Art Assets (Spritesheet)
+- Place your sheet at: `public/assets/toppings.png`
+- Expected layout: 3 rows × 2 columns; default frame size 384×384 (set in `PreloadScene.ts`).
+- Frame mapping used in code:
+  - 0: pineapple, 1: trash, 2: pizza, 3: mushrooms, 4: tomato, 5: boots
+- Good toppings: pizza, tomato, mushrooms. Bad: boots, trash. Pineapple only in evil mode.
+
+
+
+
 
 
