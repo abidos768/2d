@@ -28,7 +28,7 @@ export class GameScene extends Phaser.Scene {
 
   private requiredOrder: GoodTopping[] = []
   private collectedSet = new Set<GoodTopping>()
-  private orderText!: Phaser.GameObjects.Text
+  private orderText!: Phaser.GameObjects.Text & { orderSprites?: Phaser.GameObjects.GameObject[] }
 
   private fallSpeed = 200
   private spawnIntervalMs = 1200
@@ -57,7 +57,8 @@ export class GameScene extends Phaser.Scene {
     // UI
     this.scoreText = this.add.text(width - 16, 12, 'Score: 0', { fontFamily: 'monospace', fontSize: '20px', color: '#ffffff' }).setOrigin(1, 0)
     this.timerText = this.add.text(width * 0.5, 12, '60s', { fontFamily: 'monospace', fontSize: '20px', color: '#ffffff' }).setOrigin(0.5, 0)
-    this.orderText = this.add.text(16, 12, '', { fontFamily: 'monospace', fontSize: '18px', color: '#ffffff', wordWrap: { width: width * 0.6 } })
+    this.orderText = this.add.text(16, 12, '', { fontFamily: 'monospace', fontSize: '18px', color: '#ffffff' }) as Phaser.GameObjects.Text & { orderSprites?: Phaser.GameObjects.GameObject[] };
+    this.orderText.orderSprites = [];
 
     // Groups
     this.toppings = this.physics.add.group({ runChildUpdate: false })
@@ -156,11 +157,61 @@ export class GameScene extends Phaser.Scene {
   }
 
   private gameOver(): void {
+    // Stop all game mechanics
     this.spawnEvent?.remove(false)
     this.timerEvent?.remove(false)
     this.toppings.clear(true, true)
+    
     const { width, height } = this.scale
-    this.add.text(width * 0.5, height * 0.5, `Game Over\nScore: ${this.score}`, { fontFamily: 'monospace', fontSize: '28px', color: '#ffffff', align: 'center' }).setOrigin(0.5)
+    
+    // Add semi-transparent overlay
+    const overlay = this.add.rectangle(width * 0.5, height * 0.5, width, height, 0x000000, 0.7)
+    
+    // Add game over text
+    const gameOverText = this.add.text(width * 0.5, height * 0.4, 'GAME OVER', {
+      fontFamily: 'Arial',
+      fontSize: '48px',
+      color: '#ff3333',
+      fontStyle: 'bold',
+      stroke: '#ffffff',
+      strokeThickness: 4
+    }).setOrigin(0.5)
+    
+    // Add score display
+    const scoreText = this.add.text(width * 0.5, height * 0.5, `Score: ${this.score}`, {
+      fontFamily: 'Arial',
+      fontSize: '32px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5)
+    
+    // Add restart button
+    const button = this.add.rectangle(width * 0.5, height * 0.65, 200, 50, 0x4CAF50)
+      .setInteractive()
+      .on('pointerover', () => button.setFillStyle(0x66BB6A))
+      .on('pointerout', () => button.setFillStyle(0x4CAF50))
+      .on('pointerdown', () => this.scene.restart())
+    
+    const buttonText = this.add.text(width * 0.5, height * 0.65, 'PLAY AGAIN', {
+      fontFamily: 'Arial',
+      fontSize: '20px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5)
+    
+    // Add keyboard restart
+    this.input.keyboard?.once('keydown-ENTER', () => this.scene.restart())
+    this.input.keyboard?.once('keydown-SPACE', () => this.scene.restart())
+    
+    // Store UI elements for cleanup
+    const gameOverUI = [overlay, gameOverText, scoreText, button, buttonText]
+    gameOverUI.forEach(item => item.setScrollFactor(0))
+    
+    // Add to orderText for cleanup
+    const orderText = this.orderText as any
+    if (orderText.orderSprites) {
+      orderText.orderSprites = [...orderText.orderSprites, ...gameOverUI]
+    }
   }
 
   private generateNewOrder(): void {
@@ -171,8 +222,43 @@ export class GameScene extends Phaser.Scene {
   }
 
   private refreshOrderText(): void {
-    const items = this.requiredOrder.map((n) => (this.collectedSet.has(n) ? `[x] ${n}` : `[ ] ${n}`))
-    this.orderText.setText(`Order:\n${items.join('\n')}`)
+    // Clear previous order display
+    const orderText = this.orderText as any;
+    if (orderText.orderSprites) {
+      orderText.orderSprites.forEach((sprite: Phaser.GameObjects.GameObject) => sprite.destroy());
+    }
+    orderText.orderSprites = [];
+
+    // Create order title
+    const title = this.add.text(16, 16, 'Order:', { 
+      fontFamily: 'Arial', 
+      fontSize: '20px', 
+      color: '#ffffff',
+      fontStyle: 'bold'
+    });
+    orderText.orderSprites.push(title);
+
+    // Create order items with sprites and text
+    this.requiredOrder.forEach((n, index) => {
+      const isCollected = this.collectedSet.has(n);
+      const yPos = 50 + (index * 30);
+      
+      // Create sprite for the topping
+      const hasSheet = this.textures.exists('toppings');
+      const sprite = this.add.image(30, yPos + 12, hasSheet ? 'toppings' : `topping-${n}`, hasSheet ? TOPPING_FRAMES[n] : undefined);
+      const targetSize = 20;
+      const scale = hasSheet ? targetSize / 384 : 0.6;
+      sprite.setScale(scale);
+      orderText.orderSprites.push(sprite);
+      
+      // Create text with checkmark
+      const text = this.add.text(50, yPos, `${isCollected ? '✓ ' : ''}${n}`, { 
+        fontFamily: 'Arial', 
+        fontSize: '18px', 
+        color: isCollected ? '#88ff88' : '#ffffff'
+      });
+      orderText.orderSprites.push(text);
+    });
   }
 
   private difficultyUp(): void {

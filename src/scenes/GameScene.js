@@ -1,6 +1,7 @@
 // Created: Mobile-first game scene (portrait), basic loop: move, spawn, catch, score, timer.
 import Phaser from 'phaser';
-const GOOD_TOPPINGS = ['tomato', 'cheese', 'pepperoni', 'mushrooms'];
+import { TOPPING_FRAMES } from './PreloadScene';
+const GOOD_TOPPINGS = ['tomato', 'pizza', 'mushrooms'];
 const BAD_TOPPINGS = ['boots', 'trash']; // pineapple optional/evil mode
 export class GameScene extends Phaser.Scene {
     constructor() {
@@ -110,7 +111,8 @@ export class GameScene extends Phaser.Scene {
         // UI
         this.scoreText = this.add.text(width - 16, 12, 'Score: 0', { fontFamily: 'monospace', fontSize: '20px', color: '#ffffff' }).setOrigin(1, 0);
         this.timerText = this.add.text(width * 0.5, 12, '60s', { fontFamily: 'monospace', fontSize: '20px', color: '#ffffff' }).setOrigin(0.5, 0);
-        this.orderText = this.add.text(16, 12, '', { fontFamily: 'monospace', fontSize: '18px', color: '#ffffff', wordWrap: { width: width * 0.6 } });
+        this.orderText = this.add.text(16, 12, '', { fontFamily: 'monospace', fontSize: '18px', color: '#ffffff' });
+        this.orderText.orderSprites = [];
         // Groups
         this.toppings = this.physics.add.group({ runChildUpdate: false });
         // Overlap
@@ -167,14 +169,26 @@ export class GameScene extends Phaser.Scene {
         const { width } = this.scale;
         const spawnGood = Math.random() < (this.evilMode ? 0.7 : 0.8);
         const name = spawnGood ? Phaser.Utils.Array.GetRandom(GOOD_TOPPINGS) : Phaser.Utils.Array.GetRandom(this.getBadPool());
-        const key = `topping-${name}`;
         const x = Phaser.Math.Between(32, width - 32);
         const y = -32;
-        const sprite = this.toppings.create(x, y, key);
+        const hasSheet = this.textures.exists('toppings');
+        const sprite = hasSheet
+            ? this.toppings.create(x, y, 'toppings', TOPPING_FRAMES[name])
+            : this.toppings.create(x, y, `topping-${name}`);
         sprite.toppingName = name;
         sprite.isGood = spawnGood;
         sprite.setVelocityY(this.fallSpeed * Phaser.Math.FloatBetween(0.9, 1.15));
-        sprite.setCircle(16);
+        // Collider sized for 32px placeholder or scaled sheet frames
+        if (hasSheet) {
+            // Scale down large frames to ~48px visual size
+            const targetSize = 48;
+            const scale = targetSize / 384;
+            sprite.setScale(scale);
+            sprite.setCircle((targetSize / 2) * 0.85);
+        }
+        else {
+            sprite.setCircle(16);
+        }
         sprite.setImmovable(false);
         sprite.setCollideWorldBounds(false);
         // Clean up when off screen
@@ -191,11 +205,52 @@ export class GameScene extends Phaser.Scene {
             } });
     }
     gameOver() {
+        // Stop all game mechanics
         this.spawnEvent?.remove(false);
         this.timerEvent?.remove(false);
         this.toppings.clear(true, true);
         const { width, height } = this.scale;
-        this.add.text(width * 0.5, height * 0.5, `Game Over\nScore: ${this.score}`, { fontFamily: 'monospace', fontSize: '28px', color: '#ffffff', align: 'center' }).setOrigin(0.5);
+        // Add semi-transparent overlay
+        const overlay = this.add.rectangle(width * 0.5, height * 0.5, width, height, 0x000000, 0.7);
+        // Add game over text
+        const gameOverText = this.add.text(width * 0.5, height * 0.4, 'GAME OVER', {
+            fontFamily: 'Arial',
+            fontSize: '48px',
+            color: '#ff3333',
+            fontStyle: 'bold',
+            stroke: '#ffffff',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+        // Add score display
+        const scoreText = this.add.text(width * 0.5, height * 0.5, `Score: ${this.score}`, {
+            fontFamily: 'Arial',
+            fontSize: '32px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+        // Add restart button
+        const button = this.add.rectangle(width * 0.5, height * 0.65, 200, 50, 0x4CAF50)
+            .setInteractive()
+            .on('pointerover', () => button.setFillStyle(0x66BB6A))
+            .on('pointerout', () => button.setFillStyle(0x4CAF50))
+            .on('pointerdown', () => this.scene.restart());
+        const buttonText = this.add.text(width * 0.5, height * 0.65, 'PLAY AGAIN', {
+            fontFamily: 'Arial',
+            fontSize: '20px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+        // Add keyboard restart
+        this.input.keyboard?.once('keydown-ENTER', () => this.scene.restart());
+        this.input.keyboard?.once('keydown-SPACE', () => this.scene.restart());
+        // Store UI elements for cleanup
+        const gameOverUI = [overlay, gameOverText, scoreText, button, buttonText];
+        gameOverUI.forEach(item => item.setScrollFactor(0));
+        // Add to orderText for cleanup
+        const orderText = this.orderText;
+        if (orderText.orderSprites) {
+            orderText.orderSprites = [...orderText.orderSprites, ...gameOverUI];
+        }
     }
     generateNewOrder() {
         this.collectedSet.clear();
@@ -204,8 +259,57 @@ export class GameScene extends Phaser.Scene {
         this.refreshOrderText();
     }
     refreshOrderText() {
-        const items = this.requiredOrder.map((n) => (this.collectedSet.has(n) ? `[x] ${n}` : `[ ] ${n}`));
-        this.orderText.setText(`Order:\n${items.join('\n')}`);
+        // Clear previous order display
+        const orderText = this.orderText;
+        if (orderText.orderSprites) {
+            orderText.orderSprites.forEach((sprite) => sprite.destroy());
+        }
+        orderText.orderSprites = [];
+        // Create background panel
+        const panel = this.add.rectangle(120, 100, 200, 220, 0x000000, 0.7)
+            .setStrokeStyle(2, 0xffffff, 1);
+        orderText.orderSprites.push(panel);
+        // Add order title with icon
+        const title = this.add.text(30, 10, '🍕 ORDER', {
+            fontFamily: 'Arial',
+            fontSize: '20px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        });
+        orderText.orderSprites.push(title);
+        // Create order items with sprites and text
+        this.requiredOrder.forEach((n, index) => {
+            const isCollected = this.collectedSet.has(n);
+            const yPos = 50 + (index * 40);
+            // Create background for each order item
+            const itemBg = this.add.rectangle(120, yPos, 180, 30, isCollected ? 0x334422 : 0x222233, 0.9)
+                .setStrokeStyle(1, isCollected ? 0x88ff88 : 0x6666ff, 1);
+            orderText.orderSprites.push(itemBg);
+            // Create sprite for the topping
+            const hasSheet = this.textures.exists('toppings');
+            const sprite = this.add.image(40, yPos, hasSheet ? 'toppings' : `topping-${n}`, hasSheet ? TOPPING_FRAMES[n] : undefined);
+            const targetSize = 24;
+            const scale = hasSheet ? targetSize / 384 : 0.7;
+            sprite.setScale(scale);
+            orderText.orderSprites.push(sprite);
+            // Create text with checkmark
+            const text = this.add.text(60, yPos - 10, `${isCollected ? '✓ ' : ''}${n.toUpperCase()}`, {
+                fontFamily: 'Arial',
+                fontSize: '16px',
+                color: isCollected ? '#88ff88' : '#ffffff',
+                fontStyle: isCollected ? 'bold' : 'normal'
+            });
+            orderText.orderSprites.push(text);
+            // Add progress indicator
+            if (isCollected) {
+                const check = this.add.text(25, yPos - 8, '✓', {
+                    fontFamily: 'Arial',
+                    fontSize: '20px',
+                    color: '#88ff88'
+                });
+                orderText.orderSprites.push(check);
+            }
+        });
     }
     difficultyUp() {
         this.fallSpeed = Math.min(600, Math.floor(this.fallSpeed * 1.12));
